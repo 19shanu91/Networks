@@ -1,0 +1,1 @@
+WAP to implement PIPE function call and count the number of words through the use of pipe.

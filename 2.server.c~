@@ -1,0 +1,106 @@
+#include<stdio.h>
+#include<string.h>
+#include<sys/types.h>
+#include<errno.h>
+#include<sys/socket.h>
+#include<netinet/in.h>
+#include<arpa/inet.h>
+#include<stdlib.h>
+#include<unistd.h>
+#include<signal.h>
+
+#define MYPORT 5000
+#define backlog 10
+
+void sigchld_handler(int s)
+{
+	while(waitpid(-1, NULL, WNOHANG) > 0);
+}
+
+
+int main()
+{
+	int my_socket, bytes_recv,bytes_sent, new_sock,true=1;
+	char send_data[32], recv_data[32];
+	struct sockaddr_in my_addr, their_addr;
+	
+	if((my_socket=socket(AF_INET,SOCK_STREAM,0))==-1)
+	{
+		perror("Socket");
+		exit(1);
+	}
+	struct sigaction sa;
+
+	if (setsockopt(my_socket,SOL_SOCKET,SO_REUSEADDR,&true,sizeof(int)) == -1) { //function manipulates options associated with a socket
+	            perror("Setsockopt");
+	            exit(1);
+	}
+	        
+	        
+	my_addr.sin_family=AF_INET;
+	my_addr.sin_port=htons(MYPORT);
+	my_addr.sin_addr.s_addr=INADDR_ANY;
+	memset(&(my_addr.sin_zero),'\0',8);
+
+	
+	if(bind(my_socket,(struct sockaddr *)&my_addr, sizeof(struct sockaddr_in))==-1)
+	{
+		perror("Bind");
+		exit(1);
+	}
+	
+	if(listen(my_socket,5)==-1)
+	{
+		perror("Listen");
+		exit(1);
+	}
+
+	sa.sa_handler = sigchld_handler; // reap all dead processes
+	sigemptyset(&sa.sa_mask);
+	sa.sa_flags = SA_RESTART;
+	if (sigaction(SIGCHLD, &sa, NULL) == -1) {
+		perror("sigaction");
+		exit(1);
+	}
+
+
+
+
+	while(1){
+	
+		int sin_size=sizeof(struct sockaddr_in);
+		if((new_sock=accept(my_socket,(struct sockaddr *)&their_addr, &sin_size))==-1)
+		{
+			perror("Accept");
+			exit(1);
+		}
+		
+		printf("Server: Got Connection from : %s(PORT:%d)\n",inet_ntoa(their_addr.sin_addr),ntohs(their_addr.sin_port));
+		
+		if(!fork())
+		{
+			close(my_socket);
+
+				if((bytes_recv=recv(new_sock,recv_data,64,0))==-1)
+				{
+					perror("Receive");
+					exit(1);
+				}
+				
+				recv_data[bytes_recv]='\0';
+				if(system(recv_data)==-1)
+				{
+					perror("System");
+					exit(1);
+				}
+//			}while(recv_data!=NULL);
+			close(new_sock);
+			
+		}
+		close(new_sock);	
+	}
+	
+	close(my_socket);
+	return 0;
+}
+
